@@ -18,12 +18,10 @@ Example
 int main(int argc, char *argv[]) 
 {
 	int data;
-	struct fx_serial *ss = fx_serial_start();
+	struct fx_serial *ss = fx_serial_start("/dev/ttyUSB0", 9600, '7', 'N', '1');
 
 	fx_register_set(ss, 120, 100);
 	fx_register_get(ss, 120, &data);
-
-	// then the data should be 100
 	printf("D[%d] register data is :%d\n", 120, data);
 
 	fx_serial_stop(ss);
@@ -31,7 +29,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-Limit
+Limits
 ======
 
 1. 目前的版本只支持D寄存器(区间为 0 <= D <= 255)， 由于三菱不同FX系列D寄存器个数配置不一样可以根据通信手册扩展和修改
