@@ -482,6 +482,108 @@ static int _open_device(struct fx_serial *s, char *device)
 	return 0;
 }
 
+static tcflag_t parse_baudrate(int requested)
+{
+  int baudrate;
+
+  switch (requested)
+    {
+#ifdef B50
+    case 50: baudrate = B50; break;
+#endif
+#ifdef B75
+    case 75: baudrate = B75; break;
+#endif
+#ifdef B110
+    case 110: baudrate = B110; break;
+#endif
+#ifdef B134
+    case 134: baudrate = B134; break;
+#endif
+#ifdef B150
+    case 150: baudrate = B150; break;
+#endif
+#ifdef B200
+    case 200: baudrate = B200; break;
+#endif
+#ifdef B300
+    case 300: baudrate = B300; break;
+#endif
+#ifdef B600
+    case 600: baudrate = B600; break;
+#endif
+#ifdef B1200
+    case 1200: baudrate = B1200; break;
+#endif
+#ifdef B1800
+    case 1800: baudrate = B1800; break;
+#endif
+#ifdef B2400
+    case 2400: baudrate = B2400; break;
+#endif
+#ifdef B4800
+    case 4800: baudrate = B4800; break;
+#endif
+#ifdef B9600
+    case 9600: baudrate = B9600; break;
+#endif
+#ifdef B19200
+    case 19200: baudrate = B19200; break;
+#endif
+#ifdef B38400
+    case 38400: baudrate = B38400; break;
+#endif
+#ifdef B57600
+    case 57600: baudrate = B57600; break;
+#endif
+#ifdef B115200
+    case 115200: baudrate = B115200; break;
+#endif
+#ifdef B230400
+    case 230400: baudrate = B230400; break;
+#endif
+#ifdef B460800
+    case 460800: baudrate = B460800; break;
+#endif
+#ifdef B500000
+    case 500000: baudrate = B500000; break;
+#endif
+#ifdef B576000
+    case 576000: baudrate = B576000; break;
+#endif
+#ifdef B921600
+    case 921600: baudrate = B921600; break;
+#endif
+#ifdef B1000000
+    case 1000000: baudrate = B1000000; break;
+#endif
+#ifdef B1152000
+    case 1152000: baudrate = B1152000; break;
+#endif
+#ifdef B1500000
+    case 1500000: baudrate = B1500000; break;
+#endif
+#ifdef B2000000
+    case 2000000: baudrate = B2000000; break;
+#endif
+#ifdef B2500000
+    case 2500000: baudrate = B2500000; break;
+#endif
+#ifdef B3000000
+    case 3000000: baudrate = B3000000; break;
+#endif
+#ifdef B3500000
+    case 3500000: baudrate = B3500000; break;
+#endif
+#ifdef B4000000
+    case 4000000: baudrate = B4000000; break;
+#endif
+    default:
+      baudrate = 0;
+    }
+  return baudrate;
+}
+
 static int _set_device(struct fx_serial *s, int baude, char bits, char parity, char stop)
 {
 	int fd = s->fd;
@@ -492,15 +594,12 @@ static int _set_device(struct fx_serial *s, int baude, char bits, char parity, c
 	}
 
 	bzero(&options, sizeof(struct termios));
+	tcflag_t baudflag = parse_baudrate(baude);
+	if (!baudflag)
+    return -1;
 
-	switch (baude) {
-	case 9600:
-		cfsetispeed(&options, B9600);
-		cfsetospeed(&options, B9600);
-		break;
-	default:
-		return -1;
-	}
+	cfsetispeed(&options, baudflag);
+	cfsetospeed(&options, baudflag);
 
 	options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);	/*Input */
 	options.c_oflag &= ~OPOST;	/*Output */
@@ -593,7 +692,7 @@ static int _check_command(char *buf, int sz)
 	return ret;
 }
 
-void *thread_serialcomm(void *parm)
+static void *thread_serialcomm(void *parm)
 {
 	struct fx_serial *s = (struct fx_serial*)parm;
 	
@@ -603,31 +702,6 @@ RESTART:
 		struct serialcommand *sc = get_data(s->req, NULL);
 		int ret;
 
-		// clean serial
-//		struct timeval tv_clean;
-//		memset(&tv_clean, 0, sizeof(struct timeval));
-//		tv_clean.tv_sec  = 0;
-//		tv_clean.tv_usec = 0;	
-//
-//		fd_set rfds_clean;
-//		FD_ZERO(&rfds_clean);
-//		FD_SET(s->fd, &rfds_clean);
-//		
-//		int ret = select(s->fd+1, &rfds_clean, NULL, NULL, &tv_clean);	
-//		if (ret == -1) {
-//			DEBUG("select error\n");
-//			free(sc);
-//			goto RESTART;
-//		} else if (ret == 0) {
-//			DEBUG("never happen\n");
-//			free(sc);
-//			goto RESTART;
-//		} else {
-//			char tmp[4096];
-//			read(s->fd, tmp, 4096);
-//			DEBUG("clean plc serial buffer\n");
-//		}
-			
 		if (_check_command(sc->buf, sc->sz) == 0) {
 			DEBUG("cmd error\n");
 			free(sc);
@@ -646,7 +720,6 @@ RESTART:
 			free(sc);
 			goto RESTART;
 		}
-
 
 		// write command
 		ret = safe_write(s->fd, sc->buf, sc->sz);
@@ -689,7 +762,6 @@ RESTART:
 					goto RESTART;
 				}
 
-
 				num -= cnt;
 				p_resp += cnt;
 				sz += cnt;
@@ -702,22 +774,22 @@ RESTART:
 			}
 		}
 	
-		// free something
+		// free
 		free(sc);
 	}
 
 	return (void *)NULL;
 }
 
-struct fx_serial* fx_serial_start()
+struct fx_serial* fx_serial_start(char *device, int baude, char bits, char parity, char stop)
 {
 	struct fx_serial *s = malloc(sizeof(struct fx_serial));
 	assert(s);
 	int ret;
-	ret = _open_device(s, "/dev/ttyUSB0");
+	ret = _open_device(s, device);
 	assert(ret == 0);
 	
-	ret = _set_device(s, 9600, '7', 'E', '1');
+	ret = _set_device(s, baude, bits, parity, stop);
 	assert(ret == 0);
 	
 	pthread_t tid_serial;
@@ -729,7 +801,7 @@ struct fx_serial* fx_serial_start()
 	return s;
 }
 
-int serial_stop(struct fx_serial *s)
+int fx_serial_stop(struct fx_serial *s)
 {
 	pthread_cancel(s->tid_serial);
 	pthread_join(s->tid_serial, NULL);
@@ -779,8 +851,6 @@ static char _getAddressAscii(int address, char buf[4])
 	buf[1] = _getAscii(j);
 	buf[2] = _getAscii(m);
 	buf[3] = _getAscii(n);
-
-	//printf("add2ascii:%d->%02x, %02x, %02x, %02x\n", address, buf[0], buf[1], buf[2], buf[3]);
 }
 
 static int getReadCommandFrame (char *buf, int *sz, int address, int num)
@@ -812,11 +882,10 @@ static int getReadCommandFrame (char *buf, int *sz, int address, int num)
 
 	*sz = 11;
 
-	for (i = 0; i < *sz; i++) {
-//		printf("%02x ", buf[i]);
-	}
-
-//	printf("\n");
+	//for (i = 0; i < *sz; i++) {
+	//	printf("%02x ", buf[i]);
+	//}
+	//printf("\n");
 
 	return 0;
 }
@@ -857,11 +926,10 @@ static int getWriteCommandFrame(char *buf, int *sz, int address, int num, char *
 
 	*sz = 8+num*2+3;
 
-	for (i = 0; i < *sz; i++) {
-//		printf("%02x ", buf[i]);
-	}
-
-//	printf("\n");
+	//for (i = 0; i < *sz; i++) {
+	//	printf("%02x ", buf[i]);
+	//}
+	//	printf("\n");
 
 	return 0;
 }
@@ -873,117 +941,7 @@ static int _cb_async(int fd, char *buf, int sz)
 	return 0;
 }
 
-int controller_set(struct fx_serial *s, int id, int status)
-{
-	struct serialcommand sc;
-	
-	switch(status) {
-	case 0:
-		getWriteCommandFrame(sc.buf, &sc.sz, id, 1, "0000");
-		break;
-	case 1:
-		getWriteCommandFrame(sc.buf, &sc.sz, id, 1, "0001");
-		break;
-	default:
-		fprintf(stderr, "device status number error\n");
-		return -1;
-	}	
-
-	int fd[2];
-	pipe(fd);
-
-	sc.fd = fd[1];	
-	sc.cb = _cb_async;
-	serial_command(s, &sc);
-	
-	char buf[255];
-	int sz;
-	int ret; /*select return value*/
-	struct timeval tv;
-	fd_set readset;
-
-	FD_ZERO(&readset);
-	FD_SET(fd[0],&readset);
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	
-	if((ret = select((fd[0]+1),&readset,NULL,NULL,&tv)) < 0){
-		printf("select error\n");
-		return -1;
-	}else if(ret == 0){
-		printf("filedes not ready\n");
-		return -1;
-	} 
-
-	sz = read(fd[0], buf, 255);
-	int i;
-	for (i = 0; i < sz; i++) {
-		printf("%02x ", buf[i]);
-	}
-
-	printf("\n");
-	close(fd[0]);
-	close(fd[1]);
-
-	if (buf[0] == 0x06) {
-		return 0;
-	} else {
-		return -1;
-	}	
-} 
-
-int controller_get(struct fx_serial *s, int id, int *status)
-{
-	struct serialcommand sc;
-	getReadCommandFrame(sc.buf, &sc.sz, id, 1);
-
-	int fd[2];
-	pipe(fd);
-
-	sc.fd = fd[1];	
-	sc.cb = _cb_async;
-	serial_command(s, &sc);
-	
-	char buf[255];
-	int  sz;
-	int  ret; /*select return*/
-	struct timeval tv;
-	fd_set readset;
-	
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	FD_ZERO(&readset);
-	FD_SET(fd[0],&readset);/*let fd[0] seted in readset*/
-	if((ret = select(( fd[0]+1),&readset,NULL,NULL,&tv))< 0){
-		printf("select error\n");
-		return -1;
-	}else if(ret == 0){
-		printf("filedes are not ready for read within 5s\n");
-		return -1;
-	}
-	sz = read(fd[0], buf, 255);
-	
-	int i;
-	for (i = 0; i <  sz; i++) {
-		printf("%02x ", buf[i]);
-	}
-
-	printf("\n");
-	close(fd[0]);
-	close(fd[1]);
-
-//	printf("buf[2] = %x\n", buf[2]);
-	if (buf[2] == 0x31) {
-		*status = 1;
-	} else if (buf[2] == 0x30) {
-		*status = 0;
-	} else {
-		return -1;
-	}
-
-	return 0;
-}
-static int  atoh(char x)
+static int atoh(char x)
 {
 	int y;
 	switch(x)
@@ -1033,7 +991,7 @@ static void integer_to_buf4(int x, char *buf)
 	buf[3] = x4 + '0';
 }
 
-int sensor_set(struct fx_serial *s, int id, int data)
+int fx_register_set(struct fx_serial *s, int id, int data)
 {
 	struct serialcommand sc;
 	char buf[4];
@@ -1059,15 +1017,14 @@ int sensor_set(struct fx_serial *s, int id, int data)
 	tv.tv_usec = 0;
 	
 	if((ret = select((fd[0]+1),&readset,NULL,NULL,&tv)) < 0){
-		printf("select error\n");
+		fprintf(stderr, "select error\n");
 		return -1;
 	}else if(ret == 0){
-		printf("filedes not ready\n");
+		fprintf(stderr, "filedes not ready\n");
 		return -1;
 	} 
-
 	sz = read(fd[0], buf2, 255);
-	int i;
+//	int i;
 //	for (i = 0; i < sz; i++) {
 //		printf("%02x ", buf2[i]);
 //	}
@@ -1079,7 +1036,7 @@ int sensor_set(struct fx_serial *s, int id, int data)
 	return 0;
 }
 
-int sensor_get(struct fx_serial *s, int id, int *data)
+int fx_register_get(struct fx_serial *s, int id, int *data)
 {
 	struct serialcommand sc;
 	getReadCommandFrame(sc.buf, &sc.sz, id, 1);
@@ -1126,39 +1083,3 @@ int sensor_get(struct fx_serial *s, int id, int *data)
 
 	return 0;	
 }
-
-int sensorX_init(struct sensorX *sx, int n_id, int *id, int *data)
-{
-	sx->n = n_id;
-	int i;
-	for (i = 0; i < n_id; i++) {
-		sx->id[i] = id[i];
-		if (data != NULL) {
-			sx->data[i] = data[i];
-		}
-	}
-	return 0;
-}
-
-int sensorX_get(struct fx_serial *s, struct sensorX *sx)
-{ 
-	int i;
-
-	for (i = 0; i < sx->n; i++) {
-		if(sensor_get(s, sx->id[i], &sx->data[i]) == -1)
-			return -1;			
-	}
-	return 0;
-}
-
-int sensorX_set(struct fx_serial *s, struct sensorX *sx)
-{
-	int i;
-	for (i = 0; i < sx->n; i++) {
-		if(sensor_set(s, sx->id[i], sx->data[i]) == -1)
-			return -1;
-	}
-	return 0;
-}
-
-
